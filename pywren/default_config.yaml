@@ -2,6 +2,7 @@ account:
     aws_account_id: AWS_ACCOUNT_ID
     aws_lambda_role: pywren_exec_role
     aws_region: AWS_REGION
+    endpoint_url: ENDPOINT_URL
 
 lambda:
     memory : 1536

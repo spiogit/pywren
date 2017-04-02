@@ -2,11 +2,11 @@ import boto3
 import json
 import sys
 
-def get_runtime_info(bucket, key):
+def get_runtime_info(bucket, key, endpoint_url=None):
     """
     Download runtime information from S3 at deserialize
     """
-    s3 = boto3.resource('s3')
+    s3 = boto3.resource('s3', endpoint_url=endpoint_url)
 
     runtime_meta_key = key.replace(".tar.gz", ".meta.json")
     

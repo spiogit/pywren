@@ -45,10 +45,11 @@ def lambda_executor(config=None, job_max_runtime=280):
     S3_PREFIX = config['s3']['pywren_prefix']
     RUNTIME_S3_BUCKET = config['runtime']['s3_bucket']
     RUNTIME_S3_KEY = config['runtime']['s3_key']
+    ENDPOINT_URL = config['account']['endpoint_url']
 
     invoker = invokers.LambdaInvoker(AWS_REGION, FUNCTION_NAME)
     return Executor(AWS_REGION, S3_BUCKET, S3_PREFIX, invoker, 
-                    RUNTIME_S3_BUCKET, RUNTIME_S3_KEY, job_max_runtime)
+                    RUNTIME_S3_BUCKET, RUNTIME_S3_KEY, job_max_runtime, ENDPOINT_URL)
 
 
 def dummy_executor(config=None, job_max_runtime=100):

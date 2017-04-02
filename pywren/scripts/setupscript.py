@@ -43,13 +43,16 @@ def check_overwrite_function(filename):
         return click.confirm("{} already exists, would you like to overwrite?".format(filename))
     return True
 
-def check_bucket_exists(s3bucket):
+def check_bucket_exists(s3bucket, endpoint_url):
     """
     This is the recommended boto3 way to check for bucket
     existence:
     http://boto3.readthedocs.io/en/latest/guide/migrations3.html
     """
-    s3 = boto3.resource("s3")
+    if endpoint_url:
+        s3 = boto3.resource("s3", endpoint_url=endpoint_url)
+    else:
+        s3 = boto3.resource("s3")
     exists = True
     try:
         s3.meta.client.head_bucket(Bucket=s3bucket)
@@ -103,19 +106,25 @@ def interactive_setup(ctx, dryrun, suffix):
 
 
     click.echo("This is the PyWren interactive setup script")
+    endpoint_url = None
     try:
         #first we will try and make sure AWS is set up
 
         account_id = ctx.invoke(pywrencli.get_aws_account_id, False)
-        click.echo("Your AWS configuration appears to be set up, and your account ID is {}".format(account_id))
+        if account_id:
+            click.echo("Your AWS configuration appears to be set up, and your account ID is {}".format(account_id))
     except Exception as e:
         raise
 
     click.echo("This interactive script will set up your initial PyWren configuration.")
     click.echo("If this is your first time using PyWren then accepting the defaults should be fine.")
-    
-    # first, what is your default AWS region? 
-    aws_region = click_validate_prompt("What is your default aws region?", 
+
+    if not account_id:
+        endpoint_url = input("AWS configuration is not set up. Alternative endpoint URL:")
+        aws_region = None
+    else:
+        # first, what is your default AWS region?
+        aws_region = click_validate_prompt("What is your default aws region?",
                                  default=pywren.wrenconfig.AWS_REGION_DEFAULT, 
                                  validate_func = check_aws_region_valid, 
                                  fail_msg = "{} not a valid aws region"
@@ -134,7 +143,7 @@ def interactive_setup(ctx, dryrun, suffix):
                                       default=create_unique_bucket_name(), 
                                       validate_func=check_valid_bucket_name)
     create_bucket = False
-    if not check_bucket_exists(s3_bucket):                                        
+    if not check_bucket_exists(s3_bucket, endpoint_url):
         create_bucket = click.confirm("Bucket does not currently exist, would you like to create it?", default=True)
 
     click.echo("PyWren prefixes every object it puts in S3 with a particular prefix.")
@@ -167,6 +176,7 @@ def interactive_setup(ctx, dryrun, suffix):
                lambda_role = lambda_role, 
                function_name = function_name,
                bucket_prefix= bucket_pywren_prefix, 
+               endpoint_url = endpoint_url,
                force=True)
     if dryrun:
         click.echo("dryrun is set, not manipulating cloud state.")
@@ -174,11 +184,11 @@ def interactive_setup(ctx, dryrun, suffix):
 
     if create_bucket:
         click.echo("Creating bucket {}.".format(s3_bucket))
-        ctx.invoke(pywrencli.create_bucket)
+        ctx.invoke(pywrencli.create_bucket, endpoint_url=endpoint_url)
     click.echo("Creating role.")
-    ctx.invoke(pywrencli.create_role)
+    ctx.invoke(pywrencli.create_role, endpoint_url=endpoint_url)
     click.echo("Deploying lambda.")
-    ctx.invoke(pywrencli.deploy_lambda)
+    ctx.invoke(pywrencli.deploy_lambda, endpoint_url=endpoint_url)
 
     if use_standalone:
         click.echo("Setting up standalone mode.")
@@ -186,7 +196,7 @@ def interactive_setup(ctx, dryrun, suffix):
         ctx.invoke(pywrencli.create_instance_profile)
     click.echo("Pausing for 10 sec for changes to propoagate.")
     time.sleep(10)
-    ctx.invoke(pywrencli.test_function)
+    ctx.invoke(pywrencli.test_function, endpoint_url=endpoint_url)
 
 if __name__ == '__main__':
     interactive_setup()

@@ -33,7 +33,7 @@ class Executor(object):
     """
 
     def __init__(self, aws_region, s3_bucket, s3_prefix,
-                 invoker, runtime_s3_bucket, runtime_s3_key, job_max_runtime):
+                 invoker, runtime_s3_bucket, runtime_s3_key, job_max_runtime, endpoint_url=None):
         self.aws_region = aws_region
         self.s3_bucket = s3_bucket
         self.s3_prefix = s3_prefix
@@ -45,7 +45,7 @@ class Executor(object):
 
         self.runtime_bucket = runtime_s3_bucket
         self.runtime_key = runtime_s3_key
-        self.runtime_meta_info = runtime.get_runtime_info(runtime_s3_bucket, runtime_s3_key)
+        self.runtime_meta_info = runtime.get_runtime_info(runtime_s3_bucket, runtime_s3_key, endpoint_url)
         if not runtime.runtime_key_valid(self.runtime_meta_info):
             raise Exception("The indicated runtime: s3://{}/{} is not approprite for this python version".format(runtime_s3_bucket, runtime_s3_key))
 

@@ -38,15 +38,22 @@ def get_aws_account_id(verbose=True):
     Check to make sure boto is working and get the AWS ACCONT ID
     """
     client = boto3.client("sts")
-    account_id = client.get_caller_identity()["Account"]
+    try:
+        account_id = client.get_caller_identity()["Account"]
+    except:
+        if verbose:
+            click.echo('AWS account not found or invalid. Specify endpoint URL instead.')
+        return None
+
     if verbose:
         click.echo("Your AWS account ID is {}".format(account_id))
     return account_id
-
             
 
 @click.command()
 @click.pass_context
+@click.option('--endpoint_url', default=None,
+              help='alternative endpoint URL')
 @click.option('--aws_region', default=pywren.wrenconfig.AWS_REGION_DEFAULT, 
               help='aws region to run in')
 @click.option('--bucket_name', default=pywren.wrenconfig.AWS_S3_BUCKET_DEFAULT,
@@ -69,7 +76,7 @@ def get_aws_account_id(verbose=True):
               help="Python version to use for runtime")
 def create_config(ctx, force, aws_region, lambda_role, function_name, bucket_name, 
                   bucket_prefix, 
-                  sqs_queue, standalone_name, pythonver):
+                  sqs_queue, standalone_name, pythonver, endpoint_url):
     """
     Create a config file initialized with the defaults, and
     put it in your ~/.pywren_config
@@ -81,8 +88,13 @@ def create_config(ctx, force, aws_region, lambda_role, function_name, bucket_nam
     # FIXME check if it exists
     default_yaml = open(os.path.join(SOURCE_DIR, "../default_config.yaml")).read()
     
-    client = boto3.client("sts")
-    account_id = client.get_caller_identity()["Account"]
+    if endpoint_url:
+        account_id = ""
+        aws_region = ""
+    else:
+        client = boto3.client("sts")
+        account_id = client.get_caller_identity()["Account"]
+        endpoint_url = ""
 
     # perform substitutions -- get your AWS account ID and auto-populate
 
@@ -94,6 +106,7 @@ def create_config(ctx, force, aws_region, lambda_role, function_name, bucket_nam
     default_yaml = default_yaml.replace('pywren.jobs', bucket_prefix)
     default_yaml = default_yaml.replace('pywren-queue', sqs_queue)
     default_yaml = default_yaml.replace('pywren-standalone', standalone_name)
+    default_yaml = default_yaml.replace('ENDPOINT_URL', endpoint_url)
     if pythonver not in pywren.wrenconfig.default_runtime:
         print('No matching runtime package for python version ', pythonver)
         print('Python 2.7 runtime will be used for remote.')
@@ -127,14 +140,14 @@ def test_config(ctx):
 
 @click.command()
 @click.pass_context
-def create_role(ctx):
+def create_role(ctx, endpoint_url):
     """
     
     """
     config_filename = ctx.obj['config_filename']
     config = pywren.wrenconfig.load(config_filename)
 
-    iamclient = boto3.resource('iam')
+    iamclient = boto3.resource('iam', endpoint_url=endpoint_url)
     json_policy = json.dumps(pywren.wrenconfig.basic_role_policy)
     role_name = config['account']['aws_lambda_role']
     role = iamclient.create_role(RoleName=role_name, 
@@ -143,6 +156,8 @@ def create_role(ctx):
     
     AWS_ACCOUNT_ID = config['account']['aws_account_id']
     AWS_REGION = config['account']['aws_region']
+    if not AWS_REGION:
+        AWS_REGION = ""
     more_json_policy = more_json_policy.replace("AWS_ACCOUNT_ID", str(AWS_ACCOUNT_ID))
     more_json_policy = more_json_policy.replace("AWS_REGION", AWS_REGION)
 
@@ -151,15 +166,17 @@ def create_role(ctx):
 
 @click.command()
 @click.pass_context
-def create_bucket(ctx):
+def create_bucket(ctx, endpoint_url):
     """
     
     """
     config_filename = ctx.obj['config_filename']
     config = pywren.wrenconfig.load(config_filename)
 
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", endpoint_url=endpoint_url)
     region = config['account']['aws_region']
+    if not region:
+        region = ""
     s3.create_bucket(Bucket=config['s3']['bucket'], 
                      CreateBucketConfiguration={
                          'LocationConstraint': region})
@@ -185,7 +202,7 @@ def list_all_funcs(lambclient):
 
 @click.command()    
 @click.pass_context
-def deploy_lambda(ctx, update_if_exists = True):
+def deploy_lambda(ctx, endpoint_url, update_if_exists = True):
     """
     Package up the source code and deploy to aws. Only creates the new
     function if it doesn't already exist
@@ -216,7 +233,7 @@ def deploy_lambda(ctx, update_if_exists = True):
     zipfile_obj.close()
     #open("/tmp/deploy.zip", 'w').write(file_like_object.getvalue())
         
-    lambclient = boto3.client('lambda', region_name=AWS_REGION)
+    lambclient = boto3.client('lambda', region_name=AWS_REGION, endpoint_url=endpoint_url)
 
     ROLE = "arn:aws:iam::{}:role/{}".format(AWS_ACCOUNT_ID, AWS_LAMBDA_ROLE)
 
@@ -357,7 +374,7 @@ def delete_queue(ctx):
 
 @click.command()
 @click.pass_context
-def test_function(ctx):
+def test_function(ctx, endpoint_url):
     """
     Simple single-function test
     """
